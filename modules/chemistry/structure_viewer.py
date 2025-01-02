@@ -1,7 +1,8 @@
 from typing import Optional
-from PyQt5.QtWidgets import QWidget, QVBoxLayout, QTabWidget, QLabel
+from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
+                           QLabel, QSvgWidget)
 from PyQt5.QtCore import Qt
-from PyQt5.QtSvg import QSvgWidget
+from PyQt5.QtGui import QKeySequence, QShortcut
 from rdkit.Chem import rdMolDescriptors
 from rdkit.Chem.Draw import rdMolDraw2D
 
@@ -9,21 +10,58 @@ class StructureViewer(QWidget):
     def __init__(self, parent=None):
         super().__init__(parent, Qt.Window)
         self.setWindowFlags(Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint)
-        self.setMinimumSize(400, 400)
+        self.setMinimumSize(600, 600)
         self._setup_ui()
+        self._setup_shortcuts()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         layout.setContentsMargins(10, 10, 10, 10)
         
-        self.tabs = QTabWidget()
-        self.tabs.addTab(QSvgWidget(), "Lewis")
-        self.tabs.addTab(QSvgWidget(), "Structural")
-        self.tabs.addTab(QSvgWidget(), "Skeletal")
-        self.tabs.addTab(QLabel(), "Condensed")
+        # Header with close button
+        header = QHBoxLayout()
+        title = QLabel("Chemical Structure Viewer")
+        title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        header.addWidget(title)
+        header.addStretch()
         
-        layout.addWidget(self.tabs)
+        close_btn = QPushButton("×")
+        close_btn.setFixedSize(30, 30)
+        close_btn.clicked.connect(self.hide)
+        close_btn.setStyleSheet("""
+            QPushButton {
+                border: none;
+                border-radius: 15px;
+                background: #f0f0f0;
+                font-size: 20px;
+            }
+            QPushButton:hover {
+                background: #e0e0e0;
+            }
+        """)
+        header.addWidget(close_btn)
+        layout.addLayout(header)
+        
+        # Structure displays
+        self.lewis_svg = QSvgWidget()
+        self.structural_svg = QSvgWidget()
+        self.skeletal_svg = QSvgWidget()
+        self.formula_label = QLabel()
+        self.formula_label.setStyleSheet("font-family: monospace; font-size: 14px;")
+        
+        # Unified view layout
+        view_layout = QVBoxLayout()
+        view_layout.addWidget(self.lewis_svg)
+        view_layout.addWidget(self.structural_svg)
+        view_layout.addWidget(self.skeletal_svg)
+        view_layout.addWidget(self.formula_label, alignment=Qt.AlignCenter)
+        layout.addLayout(view_layout)
+        
         self._apply_styles()
+
+    def _setup_shortcuts(self):
+        self.escape_shortcut = QShortcut(QKeySequence(Qt.Key_Escape), self)
+        self.escape_shortcut.activated.connect(self.hide)
 
     def _apply_styles(self):
         self.setStyleSheet("""
@@ -32,19 +70,14 @@ class StructureViewer(QWidget):
                 border: 1px solid #e0e0e0;
                 border-radius: 8px;
             }
-            QTabWidget::pane {
-                border: 1px solid #e0e0e0;
-                border-radius: 4px;
+            QLabel {
+                border: none;
             }
-            QTabBar::tab {
-                padding: 8px 16px;
-                margin: 2px;
-                border: 1px solid #e0e0e0;
+            QSvgWidget {
+                border: 1px solid #f0f0f0;
                 border-radius: 4px;
-            }
-            QTabBar::tab:selected {
-                background: #e3f2fd;
-                color: #1976d2;
+                margin: 4px;
+                padding: 8px;
             }
         """)
 
@@ -52,35 +85,40 @@ class StructureViewer(QWidget):
         if not structure or not structure.mol:
             return
         
-        lewis_svg = self._generate_lewis_structure(structure.mol)
-        struct_svg = structure.svg
-        skeletal_svg = self._generate_skeletal_structure(structure.mol)
-        condensed = self._generate_condensed_formula(structure.mol)
+        # Generate and update all views
+        self.lewis_svg.load(bytearray(self._generate_lewis_structure(structure.mol), 
+                                    encoding='utf-8'))
+        self.structural_svg.load(bytearray(structure.svg, encoding='utf-8'))
+        self.skeletal_svg.load(bytearray(self._generate_skeletal_structure(structure.mol), 
+                                       encoding='utf-8'))
         
-        svg_widgets = [self.tabs.widget(i) for i in range(3)]
-        svg_contents = [lewis_svg, struct_svg, skeletal_svg]
+        formula = rdMolDescriptors.CalcMolFormula(structure.mol)
+        self.formula_label.setText(f"Condensed Formula: {formula}")
         
-        for widget, svg in zip(svg_widgets, svg_contents):
-            if isinstance(widget, QSvgWidget) and isinstance(svg, str):
-                widget.load(bytearray(svg, encoding='utf-8'))
-        
-        condensed_label = self.tabs.widget(3)
-        if isinstance(condensed_label, QLabel):
-            condensed_label.setText(condensed)
+        # Resize SVG widgets
+        for svg in [self.lewis_svg, self.structural_svg, self.skeletal_svg]:
+            svg.setFixedSize(180, 180)
 
     def _generate_lewis_structure(self, mol):
-        drawer = rdMolDraw2D.MolDraw2DSVG(400, 400)
+        drawer = rdMolDraw2D.MolDraw2DSVG(180, 180)
         drawer.drawOptions().addAtomIndices = True
-        drawer.DrawMolecule(mol)
-        drawer.FinishDrawing()
-        return drawer.GetDrawingText()
-
-    def _generate_skeletal_structure(self, mol):
-        drawer = rdMolDraw2D.MolDraw2DSVG(400, 400)
         drawer.drawOptions().addStereoAnnotation = True
         drawer.DrawMolecule(mol)
         drawer.FinishDrawing()
         return drawer.GetDrawingText()
 
-    def _generate_condensed_formula(self, mol):
-        return rdMolDescriptors.CalcMolFormula(mol)
+    def _generate_skeletal_structure(self, mol):
+        drawer = rdMolDraw2D.MolDraw2DSVG(180, 180)
+        drawer.drawOptions().addStereoAnnotation = True
+        drawer.drawOptions().addRadicals = True
+        drawer.DrawMolecule(mol)
+        drawer.FinishDrawing()
+        return drawer.GetDrawingText()
+
+    def focusInEvent(self, event):
+        super().focusInEvent(event)
+        self.escape_shortcut.setEnabled(True)
+
+    def focusOutEvent(self, event):
+        super().focusOutEvent(event)
+        self.escape_shortcut.setEnabled(False)

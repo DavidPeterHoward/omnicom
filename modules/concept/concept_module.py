@@ -1,4 +1,4 @@
-from typing import List, Dict, Any, Optional, Any
+from typing import List, Dict, Any, Optional, Tuple
 import asyncio
 import threading
 from pathlib import Path
@@ -33,7 +33,7 @@ class ConceptModule(EnhancedBaseModule):
 
     @property
     def commands(self) -> List[str]:
-        return [":c", ":concept", "@"]
+        return [":r", ":research", "@"]
 
     @property
     def example(self) -> str:

@@ -7,6 +7,7 @@ import nltk
 from nltk.corpus import wordnet as wn
 from modules.nearby_words.word_types import WordInfo, SearchResult, ResultType
 
+
 class WordIndex:
     def __init__(self):
         self.words: Dict[str, WordInfo] = {}

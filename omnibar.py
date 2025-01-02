@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QLineEdit, QListWidget, QListWidgetItem, QLabel,
-                           QPushButton, QSystemTrayIcon, QMenu, QStyle)
+                           QPushButton, QSystemTrayIcon, QMenu, QStyle, QMessageBox)
 from PyQt5.QtCore import Qt, QPoint, QTimer, QSize
 from PyQt5.QtGui import QFont, QPainter, QColor, QPen, QIcon
 import keyboard
@@ -15,7 +15,6 @@ from components import ResultsWidget, SearchDebouncer, HotkeyThread
 
 logger = logging.getLogger(__name__)
 
-
 class OmnibarWindow(QMainWindow):
     def __init__(self):
         super().__init__()
@@ -26,20 +25,25 @@ class OmnibarWindow(QMainWindow):
         self.settings_window = None
         self.tray_icon = None
 
+        # Initialize components
+        self.search_manager = SearchManager()
+        self.quick_access = QuickAccessMenu()
+        self.quick_access.moduleSelected.connect(self._on_quick_access_selected)
+
         # Load configuration first
         self.config = load_config()
-
+        
         # Initialize UI components
         self._setup_ui()
         self._apply_window_style()
-
+        
         # Initialize modules after UI
         self.enabled_modules = self._initialize_modules()
-
+        
         # Setup tray and hotkeys last
         self._setup_tray()
         self._setup_hotkeys()
-
+        
         # Hide window initially
         self.hide()
 
@@ -49,34 +53,42 @@ class OmnibarWindow(QMainWindow):
         if self.config.get('always_on_top', True):
             flags |= Qt.WindowStaysOnTopHint
         self.setWindowFlags(flags)
-
+        
         # Central widget setup
         central_widget = QWidget(self)
         self.setCentralWidget(central_widget)
         main_layout = QVBoxLayout(central_widget)
         main_layout.setContentsMargins(0, 0, 0, 0)
         main_layout.setSpacing(0)
-
+        
         # Search container
         search_container = QWidget()
         search_container.setObjectName("searchContainer")
         search_layout = QHBoxLayout(search_container)
         search_layout.setContentsMargins(15, 15, 15, 15)
-
-        # Command icon
-        self.command_icon = QLabel("⦿")
+        
+        # Command icon with quick access
+        self.command_icon = QPushButton("⦿")
+        self.command_icon.setObjectName("commandIcon")
         font_size = self.config.get('input_font_size', 11) + 8
         self.command_icon.setStyleSheet(f"""
-            QLabel {{
+            QPushButton#commandIcon {{
                 color: {self.config.get('accent_color', '#2196f3')};
                 font-size: {font_size}px;
-                padding-right: 12px;
+                padding: 8px;
+                border: none;
+                background: transparent;
                 font-weight: normal;
                 font-family: {self.config.get('font_family', 'Segoe UI')};
             }}
+            QPushButton#commandIcon:hover {{
+                background: #f5f5f5;
+                border-radius: 20px;
+            }}
         """)
+        self.command_icon.clicked.connect(self._show_quick_access)
         search_layout.addWidget(self.command_icon)
-
+        
         # Search box
         self.search_box = QLineEdit()
         font = QFont(self.config.get('font_family', 'Segoe UI'),
@@ -94,48 +106,48 @@ class OmnibarWindow(QMainWindow):
             }
         """)
         search_layout.addWidget(self.search_box)
-
+        
         # Settings button
-        self.settings_button = QPushButton("⚙")
+        self.settings_button = QPushButton()
+        self.settings_button.setIcon(QIcon(ModuleIcon('settings')))
+        self.settings_button.setIconSize(QSize(20, 20))
         self.settings_button.setStyleSheet("""
             QPushButton {
-                color: #757575;
-                font-size: 16px;
                 background: transparent;
                 border: none;
-                padding: 4px 8px;
+                padding: 8px;
+                border-radius: 20px;
             }
             QPushButton:hover {
-                color: #1976d2;
+                background: #f5f5f5;
             }
         """)
         self.settings_button.clicked.connect(self._show_settings)
         search_layout.addWidget(self.settings_button)
-
+        
         main_layout.addWidget(search_container)
-
+        
         # Results widget
-        self.results = ResultsWidget(self)
+        self.results = EnhancedResultsWidget(self)
         self.results.setFont(QFont(self.config.get('font_family', 'Segoe UI'),
-                                  self.config.get('results_font_size', 10)))
+                                 self.config.get('results_font_size', 10)))
         self.results.item_selected.connect(self._on_result_selected)
-
+        
         # Set size
         self.resize(self.config.get('window_width', 650),
-                    self.config.get('window_height', 65))
-
+                   self.config.get('window_height', 65))
+        
         # Install event filter for the search box
         self.search_box.installEventFilter(self)
-
-        # Setup search debouncer
-        self.search_debouncer = SearchDebouncer(
-            self.config.get('typing_delay_ms', 200)
+        
+        # Setup search manager
+        self.search_manager.resultsReady.connect(self._update_results)
+        self.search_manager.searchStarted.connect(
+            lambda m: self.results.show_loading(m)
         )
-        self.search_debouncer.timer.timeout.connect(self._process_search)
-
-        # Connect signals
-        self.search_box.textChanged.connect(self._on_text_changed)
-        self.search_box.returnPressed.connect(self._on_return_pressed)
+        self.search_manager.searchError.connect(
+            lambda m, e: self._show_error(m, e)
+        )
 
     def _initialize_modules(self) -> Dict[str, Any]:
         """Initialize and return enabled modules based on configuration."""
@@ -304,14 +316,92 @@ class OmnibarWindow(QMainWindow):
             self.results.addItem(error_item)
 
     def _show_settings(self):
-        if not hasattr(self, 'settings_window'):
-            self.settings_window = SettingsWindow(self)
-            self.settings_window.settingsChanged.connect(self.apply_settings)
-        self.settings_window.show()
-        self.settings_window.raise_()
-        self.settings_window.activateWindow()
+        try:
+            # Initialize settings window if needed
+            if not self.settings_window:
+                from settings.pages.main_window import SettingsWindow
+                self.settings_window = SettingsWindow(self)
+                self.settings_window.settingsChanged.connect(self.apply_settings)
+            
+            # Load current settings
+            self.settings_window.load_settings()
+            
+            # Show and raise window
+            self.settings_window.show()
+            self.settings_window.raise_()
+            self.settings_window.activateWindow()
+            
+        except Exception as e:
+            self.logger.error(f"Error showing settings: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Could not open settings window: {str(e)}"
+            )
 
+    def _show_quick_access(self):
+        """Show quick access menu under command icon"""
+        self.quick_access.show_at_button(self.command_icon)
+
+    def _on_quick_access_selected(self, module_name: str):
+        """Handle module selection from quick access menu"""
+        if module_name in self.enabled_modules:
+            module = self.enabled_modules[module_name]
+            # Get the first command from the module
+            if module.commands:
+                command = module.commands[0]
+                self.search_box.setText(f"{command} ")
+                self.search_box.setFocus()
+
+    def _update_results(self, module_name: str, results: List[Dict[str, Any]]):
+        """Update results list with new search results"""
+        self.results.hide_loading()
+        
+        # Clear previous results if different module
+        if self.current_module != module_name:
+            self.results.clear()
+            self.current_module = module_name
+
+        # Add module header
+        if module_name in self.enabled_modules:
+            module = self.enabled_modules[module_name]
+            header_item = QListWidgetItem(
+                f"{module.icon} {module.name} - Example: {module.commands[0]} {module.example}"
+            )
+            header_item.setFlags(Qt.NoItemFlags)
+            self.results.addItem(header_item)
+
+        # Add results
+        for result in results:
+            item = QListWidgetItem(result["display"])
+            if "icon" in result:
+                item.setIcon(ModuleIcon(result["icon"]))
+            self.results.addItem(item)
+
+        # Show results if we have any
+        if self.results.count() > 0:
+            screen = QApplication.screenAt(self.pos())
+            if screen:
+                screen_height = screen.availableGeometry().height()
+                max_height = screen_height - self.pos().y() - self.height() - 20
+                self.results.update_max_height(max_height)
+            
+            pos = self.mapToGlobal(QPoint(0, self.height()))
+            self.results.move(pos)
+            self.results.show()
+            self.activateWindow()
+            self.search_box.setFocus()
+
+    def _show_error(self, module_name: str, error: str):
+        """Show error in results list"""
+        self.results.hide_loading()
+        error_item = QListWidgetItem(f"Error in {module_name}: {error}")
+        error_item.setForeground(QColor("#dc3545"))
+        self.results.addItem(error_item)
+        
+        
     def apply_settings(self):
+        """Apply settings changes"""
         self.config = load_config()
 
         # Update fonts
@@ -324,21 +414,30 @@ class OmnibarWindow(QMainWindow):
 
         # Update command icon
         self.command_icon.setStyleSheet(f"""
-            QLabel {{
+            QPushButton#commandIcon {{
                 color: {self.config.get('accent_color', '#2196f3')};
                 font-size: {input_size + 8}px;
-                padding-right: 12px;
+                padding: 8px;
+                border: none;
+                background: transparent;
                 font-weight: normal;
                 font-family: {font.family()};
+            }}
+            QPushButton#commandIcon:hover {{
+                background: #f5f5f5;
+                border-radius: 20px;
             }}
         """)
 
         # Update window properties
         self.resize(self.config.get('window_width', 650),
-                    self.config.get('window_height', 65))
+                   self.config.get('window_height', 65))
 
-        # Update search debouncer
-        self.search_debouncer.delay_ms = self.config.get('typing_delay_ms', 200)
+        # Update search behavior
+        self.search_manager.update_settings({
+            'delay_ms': self.config.get('typing_delay_ms', 200),
+            'min_chars': self.config.get('min_search_chars', 2)
+        })
 
         # Update modules
         self.enabled_modules = self._initialize_modules()
@@ -347,14 +446,70 @@ class OmnibarWindow(QMainWindow):
         self._apply_window_style()
 
         # Update hotkey
-        shortcut = self.config.get('activation_shortcut', 'Win+Space')
-        self.hotkey_thread.update_shortcut(shortcut)
+        if hasattr(self, 'hotkey_thread') and self.hotkey_thread:
+            shortcut = self.config.get('activation_shortcut', 'Win+Space')
+            self.hotkey_thread.update_shortcut(shortcut)
 
         # Update tray
         if self.config.get('minimize_to_tray', True):
             self.tray_icon.show()
         else:
             self.tray_icon.hide()
+
+    def focusInEvent(self, event):
+        """Handle window focus"""
+        super().focusInEvent(event)
+        # Ensure search box has focus when window is focused
+        self.search_box.setFocus(Qt.OtherFocusReason)
+
+    def _handle_escape(self, event):
+        """Handle escape key press"""
+        if self.results.isVisible():
+            self.results.hide()
+        else:
+            self.hide_all()
+        event.accept()
+        
+    def hide_all(self):
+        """Hide window and all popups"""
+        self.hide()
+        self.results.hide()
+        self.quick_access.hide()
+        self.search_box.clear()
+        self.current_query = None
+
+    def _center_on_cursor(self):
+        """Center window on current cursor position"""
+        cursor_pos = QCursor.pos()
+        screen = QApplication.screenAt(cursor_pos)
+        if not screen:
+            screen = QApplication.primaryScreen()
+            
+        screen_geom = screen.availableGeometry()
+        
+        # Calculate window position
+        x = cursor_pos.x() - self.width() // 2
+        y = cursor_pos.y() - self.height() // 2
+        
+        # Ensure window stays within screen bounds
+        x = max(screen_geom.left(), min(x, screen_geom.right() - self.width()))
+        y = max(screen_geom.top(), min(y, screen_geom.bottom() - self.height()))
+        
+        self.move(x, y)
+        
+        
+    def _initialize_settings(self):
+        """Initialize settings window lazily"""
+        if hasattr(self, 'settings_window') and self.settings_window is not None:
+            return
+
+        try:
+            from settings.pages.main_window import SettingsWindow
+            self.settings_window = SettingsWindow(self)
+            self.settings_window.settingsChanged.connect(self.apply_settings)
+        except Exception as e:
+            logger.error(f"Error initializing settings window: {e}")
+            self.settings_window = None
 
     def _toggle_visibility(self):
         if self.isVisible():
@@ -415,12 +570,6 @@ class OmnibarWindow(QMainWindow):
 
         except Exception as e:
             logger.error(f"Error saving command history: {e}")
-
-    def hide_all(self):
-        self.hide()
-        self.results.hide()
-        self.search_box.clear()
-        self.current_query = None
 
     def mousePressEvent(self, event):
         if event.button() == Qt.LeftButton:

@@ -1,10 +1,226 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
-                           QCheckBox, QScrollArea, QPushButton, QLabel,
-                           QSpinBox, QComboBox, QGridLayout, QFrame,
-                           QProgressBar, QDialog, QDialogButtonBox)
-from PyQt5.QtCore import Qt, QTimer
+                           QLabel, QCheckBox, QSpinBox, QComboBox, QPushButton,
+                           QScrollArea, QFrame, QTabWidget, QLineEdit, QGridLayout,
+                           QMessageBox, QProgressBar)
+from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from modules import available_modules
 import time
+from utils.icons import IconRegistry
+import json
+from modules import available_modules
+
+class ModuleConfigWidget(QFrame):
+    """Widget for configuring a single module"""
+    configChanged = pyqtSignal(str, dict)  # module_name, config
+    
+    def __init__(self, module_name: str, module: Any, parent=None):
+        super().__init__(parent)
+        self.module_name = module_name
+        self.module = module
+        self.icon_registry = IconRegistry()
+        self._setup_ui()
+
+    def _setup_ui(self):
+        layout = QVBoxLayout(self)
+        
+        # Header
+        header = QHBoxLayout()
+        
+        # Module icon
+        icon_label = QLabel()
+        if hasattr(self.module, 'icon'):
+            icon = self.icon_registry.get_qicon(
+                self.module.icon.lower(),
+                size=24
+            )
+            icon_label.setPixmap(icon.pixmap(QSize(24, 24)))
+        header.addWidget(icon_label)
+        
+        # Module title
+        title = QLabel(self.module_name)
+        title.setStyleSheet("font-weight: bold; font-size: 14px;")
+        header.addWidget(title)
+        
+        # Enable/Disable toggle
+        self.enabled_check = QCheckBox("Enabled")
+        header.addWidget(self.enabled_check)
+        
+        header.addStretch()
+        layout.addLayout(header)
+        
+        # Module settings
+        settings_group = QGroupBox("Settings")
+        settings_layout = QGridLayout()
+        self.setting_widgets = {}
+        
+        if hasattr(self.module, 'get_settings'):
+            settings = self.module.get_settings()
+            for row, setting in enumerate(settings):
+                label = QLabel(setting['label'])
+                settings_layout.addWidget(label, row, 0)
+                
+                if setting['type'] == 'bool':
+                    widget = QCheckBox()
+                    widget.setChecked(setting.get('default', False))
+                elif setting['type'] == 'int':
+                    widget = QSpinBox()
+                    widget.setRange(setting.get('min', 0), 
+                                 setting.get('max', 100))
+                    widget.setValue(setting.get('default', 0))
+                elif setting['type'] == 'choice':
+                    widget = QComboBox()
+                    widget.addItems(setting.get('choices', []))
+                    widget.setCurrentText(setting.get('default', ''))
+                elif setting['type'] == 'text':
+                    widget = QLineEdit()
+                    widget.setText(setting.get('default', ''))
+                else:
+                    continue
+                
+                if 'tooltip' in setting:
+                    widget.setToolTip(setting['tooltip'])
+                
+                settings_layout.addWidget(widget, row, 1)
+                self.setting_widgets[setting['key']] = widget
+                
+                # Connect change signals
+                if isinstance(widget, QCheckBox):
+                    widget.stateChanged.connect(self._on_config_changed)
+                elif isinstance(widget, QSpinBox):
+                    widget.valueChanged.connect(self._on_config_changed)
+                elif isinstance(widget, QComboBox):
+                    widget.currentTextChanged.connect(self._on_config_changed)
+                elif isinstance(widget, QLineEdit):
+                    widget.textChanged.connect(self._on_config_changed)
+        
+        settings_group.setLayout(settings_layout)
+        layout.addWidget(settings_group)
+        
+        # Statistics
+        if hasattr(self.module, 'get_statistics'):
+            stats_group = QGroupBox("Statistics")
+            stats_layout = QVBoxLayout()
+            
+            stats = self.module.get_statistics()
+            for key, value in stats.items():
+                stats_layout.addWidget(QLabel(f"{key}: {value}"))
+            
+            stats_group.setLayout(stats_layout)
+            layout.addWidget(stats_group)
+        
+        # Actions
+        if hasattr(self.module, 'get_actions'):
+            actions_group = QGroupBox("Actions")
+            actions_layout = QHBoxLayout()
+            
+            actions = self.module.get_actions()
+            for action in actions:
+                btn = QPushButton(action['label'])
+                btn.clicked.connect(action['callback'])
+                if 'tooltip' in action:
+                    btn.setToolTip(action['tooltip'])
+                actions_layout.addWidget(btn)
+            
+            actions_layout.addStretch()
+            actions_group.setLayout(actions_layout)
+            layout.addWidget(actions_group)
+        
+        # Cache control
+        if hasattr(self.module, 'clear_cache'):
+            cache_group = QGroupBox("Cache")
+            cache_layout = QHBoxLayout()
+            
+            clear_cache_btn = QPushButton("Clear Cache")
+            clear_cache_btn.clicked.connect(self._clear_cache)
+            cache_layout.addWidget(clear_cache_btn)
+            
+            cache_layout.addStretch()
+            cache_group.setLayout(cache_layout)
+            layout.addWidget(cache_group)
+        
+        # Add stretch at the end
+        layout.addStretch()
+        
+        # Connect enabled toggle
+        self.enabled_check.stateChanged.connect(self._on_config_changed)
+        
+        self._apply_styles()
+
+    def _apply_styles(self):
+        self.setStyleSheet("""
+            QFrame {
+                background: white;
+                border: 1px solid #e0e0e0;
+                border-radius: 8px;
+                padding: 12px;
+            }
+            QGroupBox {
+                font-weight: bold;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+                margin-top: 8px;
+                padding-top: 16px;
+            }
+            QGroupBox::title {
+                subcontrol-origin: margin;
+                left: 8px;
+                padding: 0 3px;
+            }
+            QPushButton {
+                padding: 6px 12px;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+            }
+            QPushButton:hover {
+                background: #f5f5f5;
+            }
+            QCheckBox {
+                spacing: 8px;
+            }
+            QSpinBox, QComboBox, QLineEdit {
+                padding: 4px;
+                border: 1px solid #e0e0e0;
+                border-radius: 4px;
+            }
+        """)
+
+    def _on_config_changed(self):
+        """Handle any configuration change"""
+        config = self.get_config()
+        self.configChanged.emit(self.module_name, config)
+        
+    def get_config(self) -> dict:
+        """Get current module configuration"""
+        config = {
+            'enabled': self.enabled_check.isChecked()
+        }
+        
+        for key, widget in self.setting_widgets.items():
+            if isinstance(widget, QCheckBox):
+                config[key] = widget.isChecked()
+            elif isinstance(widget, QSpinBox):
+                config[key] = widget.value()
+            elif isinstance(widget, QComboBox):
+                config[key] = widget.currentText()
+            elif isinstance(widget, QLineEdit):
+                config[key] = widget.text()
+                
+        return config
+
+    def load_config(self, config: dict):
+        """Load configuration into widgets"""
+        self.enabled_check.setChecked(config.get('enabled', True))
+        
+        for key, widget in self.setting_widgets.items():
+            if key in config:
+                if isinstance(widget, QCheckBox):
+                    widget.setChecked(config[key])
+                elif isinstance(widget, QSpinBox):
+                    widget.setValue(config[key])
+                elif isinstance(widget, QComboBox):
+                    widget.setCurrentText(config[key])
+                elif isinstance(widget, QLineEdit):
+                    widget.setText(config[key])
 
 class ModuleSettingsWidget(QFrame):
     def __init__(self, module_name, module, parent=None):
@@ -137,162 +353,135 @@ class ClearCacheDialog(QDialog):
     def update_progress(self, module_name, count):
         self.status_label.setText(f"Clearing cache: {module_name}")
         self.progress.setValue(count)
-
 class ModulesPage(QWidget):
+    """Main modules configuration page"""
+    configChanged = pyqtSignal(dict)  # All module configs
+    
     def __init__(self):
         super().__init__()
+        self.module_widgets = {}
         self._setup_ui()
 
     def _setup_ui(self):
         layout = QVBoxLayout(self)
         
-        # Top controls
-        top_controls = QHBoxLayout()
-        self.enable_all = QPushButton("Enable All")
-        self.disable_all = QPushButton("Disable All")
-        self.enable_all.clicked.connect(self._enable_all_modules)
-        self.disable_all.clicked.connect(self._disable_all_modules)
-        top_controls.addWidget(self.enable_all)
-        top_controls.addWidget(self.disable_all)
-        top_controls.addStretch()
-        layout.addLayout(top_controls)
-
-        # Scroll area for modules
+        # Controls
+        controls = QHBoxLayout()
+        
+        # Global enable/disable
+        enable_all = QPushButton("Enable All")
+        disable_all = QPushButton("Disable All")
+        enable_all.clicked.connect(self._enable_all_modules)
+        disable_all.clicked.connect(self._disable_all_modules)
+        controls.addWidget(enable_all)
+        controls.addWidget(disable_all)
+        
+        # Cache controls
+        clear_all_cache = QPushButton("Clear All Caches")
+        clear_all_cache.clicked.connect(self._clear_all_caches)
+        controls.addWidget(clear_all_cache)
+        
+        controls.addStretch()
+        layout.addLayout(controls)
+        
+        # Create scroll area
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
-        scroll.setFrameShape(QScrollArea.NoFrame)
+        scroll.setFrameShape(QFrame.NoFrame)
         
-        content = QWidget()
-        self.content_layout = QVBoxLayout(content)
+        # Container for modules
+        container = QWidget()
+        self.modules_layout = QVBoxLayout(container)
         
-        # Create module settings widgets
-        self.module_widgets = {}
+        # Add module widgets
         for module_name, module in available_modules.items():
-            module_widget = ModuleSettingsWidget(module_name, module)
-            self.content_layout.addWidget(module_widget)
-            self.module_widgets[module_name] = module_widget
-
-        self.content_layout.addStretch()
-        scroll.setWidget(content)
+            widget = ModuleConfigWidget(module_name, module)
+            widget.configChanged.connect(self._on_module_config_changed)
+            self.module_widgets[module_name] = widget
+            self.modules_layout.addWidget(widget)
+        
+        self.modules_layout.addStretch()
+        scroll.setWidget(container)
         layout.addWidget(scroll)
-
-        # Bottom controls
-        bottom_controls = QHBoxLayout()
-        self.clear_cache = QPushButton("Clear All Caches")
-        self.clear_cache.clicked.connect(self._clear_all_caches)
-        bottom_controls.addWidget(self.clear_cache)
-        bottom_controls.addStretch()
-        layout.addLayout(bottom_controls)
-
+        
+        # Apply styles
         self._apply_styles()
 
     def _apply_styles(self):
-        style = """
-            QFrame {
-                background: white;
-                border: 1px solid #ddd;
-                border-radius: 4px;
-                margin: 2px;
-                padding: 8px;
-            }
+        self.setStyleSheet("""
             QPushButton {
                 padding: 6px 12px;
-                border: 1px solid #ccc;
+                border: 1px solid #e0e0e0;
                 border-radius: 4px;
-                background: #f8f9fa;
+                background: white;
             }
             QPushButton:hover {
-                background: #e9ecef;
-                border-color: #bbb;
-            }
-            QCheckBox {
-                spacing: 8px;
-            }
-            QCheckBox::indicator {
-                width: 18px;
-                height: 18px;
-                border: 1px solid #ccc;
-                border-radius: 3px;
-            }
-            QCheckBox::indicator:checked {
-                background-color: #2196f3;
+                background: #f5f5f5;
                 border-color: #2196f3;
-                image: url(check.png);
-            }
-            QSpinBox {
-                padding: 4px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-            }
-            QSpinBox:hover {
-                border-color: #bbb;
-            }
-            QComboBox {
-                padding: 4px;
-                border: 1px solid #ccc;
-                border-radius: 4px;
-                min-width: 100px;
-            }
-            QComboBox:hover {
-                border-color: #bbb;
-            }
-            QLabel {
-                color: #333;
             }
             QScrollArea {
                 border: none;
+                background: transparent;
             }
-            QPushButton#clearCache {
-                color: #dc3545;
-                border-color: #dc3545;
-            }
-            QPushButton#clearCache:hover {
-                background: #dc3545;
-                color: white;
-            }
-        """
-        self.setStyleSheet(style)
+        """)
 
     def _enable_all_modules(self):
+        """Enable all modules"""
         for widget in self.module_widgets.values():
-            widget.enabled_checkbox.setChecked(True)
+            widget.enabled_check.setChecked(True)
 
     def _disable_all_modules(self):
+        """Disable all modules"""
         for widget in self.module_widgets.values():
-            widget.enabled_checkbox.setChecked(False)
+            widget.enabled_check.setChecked(False)
 
     def _clear_all_caches(self):
-        dialog = ClearCacheDialog(self)
-        dialog.show()
-        
-        count = 0
-        for module_name, module in available_modules.items():
-            if hasattr(module, 'clear_cache'):
-                dialog.update_progress(module_name, count)
-                try:
-                    module.clear_cache()
-                except Exception as e:
-                    print(f"Error clearing cache for {module_name}: {e}")
-                count += 1
-                QTimer.singleShot(100, lambda: None)  # Allow UI updates
-        
-        dialog.accept()
+        """Clear caches for all modules"""
+        try:
+            for module_name, widget in self.module_widgets.items():
+                if hasattr(widget.module, 'clear_cache'):
+                    widget.module.clear_cache()
+            
+            QMessageBox.information(
+                self,
+                "Success",
+                "All module caches cleared successfully"
+            )
+        except Exception as e:
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Failed to clear some caches: {str(e)}"
+            )
 
-    def load_settings(self, config):
-        module_settings = config.get('module_settings', {})
-        for module_name, widget in self.module_widgets.items():
-            settings = module_settings.get(module_name, {'enabled': True})
-            widget.load_settings(settings)
+    def _on_module_config_changed(self, module_name: str, config: dict):
+        """Handle module configuration changes"""
+        configs = self.get_all_configs()
+        self.configChanged.emit(configs)
 
-    def save_settings(self, config):
-        module_settings = {}
-        for module_name, widget in self.module_widgets.items():
-            module_settings[module_name] = widget.get_settings()
-        config['module_settings'] = module_settings
+    def get_all_configs(self) -> dict:
+        """Get configurations for all modules"""
+        return {
+            name: widget.get_config()
+            for name, widget in self.module_widgets.items()
+        }
 
-    def apply_settings(self):
+    def load_configs(self, configs: dict):
+        """Load configurations for all modules"""
+        for module_name, config in configs.items():
+            if module_name in self.module_widgets:
+                self.module_widgets[module_name].load_config(config)
+
+    def save_configs(self) -> dict:
+        """Save current configurations"""
+        return self.get_all_configs()
+
+    def validate_configs(self) -> tuple[bool, str]:
+        """Validate all module configurations"""
         for module_name, widget in self.module_widgets.items():
-            settings = widget.get_settings()
-            module = available_modules[module_name]
-            if hasattr(module, 'apply_settings'):
-                module.apply_settings(settings)
+            config = widget.get_config()
+            if hasattr(widget.module, 'validate_config'):
+                valid, message = widget.module.validate_config(config)
+                if not valid:
+                    return False, f"Invalid configuration for {module_name}: {message}"
+        return True, ""

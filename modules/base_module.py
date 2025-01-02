@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
+
 from pathlib import Path
 import json
 import logging
@@ -7,6 +8,9 @@ import time
 from threading import Lock
 import asyncio
 from concurrent.futures import ThreadPoolExecutor
+from utils.async_helpers import AsyncHelper
+from utils.cache_manager import ModuleCache
+
 
 class ModuleCache:
     def __init__(self, cache_dir: Path, max_age: int = 3600):
@@ -52,7 +56,7 @@ class ModuleCache:
         with self.cache_lock:
             timestamp = time.time()
             self.memory_cache[key] = (value, timestamp)
-            
+
             cache_file = self.cache_dir / f"{key}.json"
             try:
                 with open(cache_file, 'w') as f:
@@ -78,13 +82,16 @@ class ModuleCache:
                 except Exception as e:
                     self.logger.error(f"Error clearing cache file {cache_file}: {e}")
 
+
 class EnhancedBaseModule(ABC):
     def __init__(self):
         base_cache_dir = Path.home() / '.omnibar' / 'cache'
         self.cache = ModuleCache(base_cache_dir / self.name.lower())
         self._setup_logging()
         self.settings = {}
-        self._executor = ThreadPoolExecutor(max_workers=1)
+        self.async_helper = AsyncHelper()
+        self.is_searching = False
+        self._current_query: Optional[str] = None
 
     def _setup_logging(self):
         self.logger = logging.getLogger(f'Module.{self.name}')
@@ -92,7 +99,9 @@ class EnhancedBaseModule(ABC):
         log_dir = Path.home() / '.omnibar' / 'logs'
         log_dir.mkdir(parents=True, exist_ok=True)
         handler = logging.FileHandler(log_dir / f'{self.name.lower()}.log')
-        handler.setFormatter(logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s'))
+        handler.setFormatter(logging.Formatter(
+            '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+        ))
         self.logger.addHandler(handler)
 
     @property
@@ -128,26 +137,59 @@ class EnhancedBaseModule(ABC):
         return {}
 
     @abstractmethod
-    def _get_results_impl(self, query: str) -> List[Dict[str, Any]]:
+    async def _get_results_impl(self, query: str) -> List[Dict[str, Any]]:
+        """Implementation of the search functionality"""
         pass
 
-    def get_results(self, query: str) -> List[Dict[str, Any]]:
-        """Synchronous wrapper for getting results"""
+    async def get_results(self, query: str) -> List[Dict[str, Any]]:
+        """Main entry point for getting results"""
         if not self.settings.get('enabled', True):
             return []
-            
+
+        # Check if we should cancel previous search
+        if self.is_searching and query != self._current_query:
+            self.logger.debug(f"Cancelling previous search for: {self._current_query}")
+            # Implement cancellation mechanism here if needed
+            self.is_searching = False
+
+        self._current_query = query
+        self.is_searching = True
+
         try:
-            # Run in thread pool if the implementation is synchronous
-            loop = asyncio.get_event_loop()
-            if loop.is_running():
-                future = loop.run_in_executor(self._executor, self._get_results_impl, query)
-                return loop.run_until_complete(future)
-            else:
-                return self._get_results_impl(query)
+            # Check cache first
+            cache_key = f"search_{query.lower()}"
+            cached_results = self.cache.get(cache_key)
+            if cached_results is not None:
+                return cached_results
+
+            # Get results
+            results = await self._get_results_impl(query)
+
+            # Cache results if search completed successfully
+            if self.is_searching:  # Only cache if not cancelled
+                self.cache.set(cache_key, results)
+
+            return results if self.is_searching else []
+
         except Exception as e:
             self.logger.error(f"Error getting results for query {query}: {e}")
             return []
+        finally:
+            if self._current_query == query:  # Only reset if this is the current query
+                self.is_searching = False
+                self._current_query = None
 
     def clear_cache(self):
         """Clear module cache"""
         self.cache.clear()
+
+    def cleanup(self):
+        """Cleanup module resources"""
+        self.async_helper.stop()
+
+    async def initialize(self):
+        """Initialize module async resources"""
+        pass
+
+    def __del__(self):
+        self.cleanup()
