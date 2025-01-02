@@ -1,0 +1,40 @@
+fastapi
+uvicorn
+nltk
+gensim
+textblob
+numpy
+sympy
+pytz
+PyQt5
+keyboard
+requests
+pyautogui
+pydantic
+qtawesome
+asyncio
+numpy
+gensim
+networkx
+aiohttp
+asyncio
+metaphone
+beautifulsoup4 
+pickle5
+rapidfuzz
+wikipedia-api
+rapidfuzz
+rdkit
+pubchempy 
+Pillow
+
+black # Code Formatter
+flake8 # Linter for style, logical errors, and more
+isort # Sorts and organizes imports
+mypy # Static typechecker to enforce type annotations
+pydantic # Data validation and settings management
+pre-commit # Pre-commit hooks for git
+tox # Automates testing across multiple environments
+pyright # Static typechecker to enforce type annotations
+autoflake # Code Formatter
+pylint # Comprehensive linter that scores code quality

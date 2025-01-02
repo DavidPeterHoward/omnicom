@@ -1,0 +1,75 @@
+[tool.black]
+line-length = 155
+target-version = ['py37']
+exclude = '''
+/(
+    \.git
+    | \.venv
+    | build
+    | dist
+)/
+'''
+
+[tool.isort]
+profile = "black"
+line_length = 155
+multi_line_output = 3
+include_trailing_comma = true
+
+[tool.mypy]
+python_version = "3.7"
+ignore_missing_imports = true
+check_untyped_defs = true
+disallow_untyped_calls = true
+strict = true
+
+[tool.flake8]
+max-line-length = 155
+extend-ignore = [
+    "E203",  # Conflicts with black
+    "W503"   # Conflicts with black
+]
+exclude = [
+    ".git",
+    ".venv",
+    "__pycache__",
+    "build",
+    "dist",
+]
+
+[tool.pylint.MASTER]
+ignore = "venv, .git"
+
+[tool.autoflake]
+remove-unused-variables = true
+remove-all-unused-imports = true
+
+[tool.pydantic-mypy]
+init-forbid-extra = true
+warn-untyped-fields = true
+
+[tool.coverage.run]
+branch = true
+source = ["."]
+omit = [
+    "tests/*",
+    "venv/*",
+    ".venv/*",
+    "build/*",
+    "dist/*"
+]
+
+[tool.radon]
+exclude = [
+    "tests/*",
+    "venv/*",
+    ".venv/*",
+    "build/*",
+    "dist/*"
+]
+complexity = 'B'
+
+[tool.xenon]
+max-absolute = "A"
+max-modules = "B"
+max-average = "A"

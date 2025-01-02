@@ -1,0 +1,8 @@
+{
+  "files.watcherExclude": {
+    "**/.venv/**": true
+  },
+  "files.watcherTimeout": 1000,
+  "mypy.dmypyExecutable": "${workspaceFolder}\\venv\\Scripts\\dmypy.exe",
+  "mypy.dmypyEnabled": true
+}
