@@ -185,7 +185,22 @@ class EnhancedBaseModule(ABC):
 
     def cleanup(self):
         """Cleanup module resources"""
-        self.async_helper.stop()
+        try:
+            # Clear caches
+            self.cache.clear()
+            
+            # Stop any ongoing async operations
+            self.async_helper.stop()
+            
+            # Custom cleanup
+            self._cleanup()
+            
+        except Exception as e:
+            self.logger.error(f"Error during cleanup: {e}")
+
+    def _cleanup(self):
+        """Custom cleanup, to be overridden by modules"""
+        pass
 
     async def initialize(self):
         """Initialize module async resources"""

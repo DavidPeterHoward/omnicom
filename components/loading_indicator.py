@@ -2,6 +2,7 @@ from PyQt5.QtWidgets import QWidget
 from PyQt5.QtCore import Qt, QTimer, QPropertyAnimation, QEasingCurve, pyqtProperty
 from PyQt5.QtGui import QPainter, QColor, QPen
 
+
 class LoadingIndicator(QWidget):
     def __init__(self, parent=None, color=QColor("#2196f3")):
         super().__init__(parent)

@@ -1,13 +1,13 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                            QLabel, QCheckBox, QSpinBox, QComboBox, QPushButton,
                            QScrollArea, QFrame, QTabWidget, QLineEdit, QGridLayout,
-                           QMessageBox, QProgressBar)
+                           QMessageBox, QProgressBar, QDialog)
 from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from modules import available_modules
+from typing import Dict, Any, List, Tuple
 import time
 from utils.icons import IconRegistry
 import json
-from modules import available_modules
 
 class ModuleConfigWidget(QFrame):
     """Widget for configuring a single module"""
@@ -476,7 +476,7 @@ class ModulesPage(QWidget):
         """Save current configurations"""
         return self.get_all_configs()
 
-    def validate_configs(self) -> tuple[bool, str]:
+    def validate_configs(self):
         """Validate all module configurations"""
         for module_name, widget in self.module_widgets.items():
             config = widget.get_config()

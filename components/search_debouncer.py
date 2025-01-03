@@ -11,6 +11,7 @@ class SearchTask:
     timestamp: float
     task_id: str
 
+
 class EnhancedDebouncer(QObject):
     searchComplete = pyqtSignal(str, list)  # query, results
     searchError = pyqtSignal(str, str)  # query, error message
@@ -86,12 +87,13 @@ class EnhancedDebouncer(QObject):
             self.current_task = None
         self.async_helper.stop()
 
+
 class SearchManager(QObject):
     resultsReady = pyqtSignal(str, list)  # module_name, results
     searchStarted = pyqtSignal(str)  # module_name
     searchError = pyqtSignal(str, str)  # module_name, error
     
-    def __init__(self, parent: Optional[QObject] = None):
+    def __init__(self, parent=None):
         super().__init__(parent)
         self.debouncers = {}
         self.settings = {
@@ -99,7 +101,7 @@ class SearchManager(QObject):
             'min_chars': 2
         }
 
-    def register_module(self, module_name: str, search_function: Callable):
+    def register_module(self, module_name: str, search_function: callable):
         debouncer = EnhancedDebouncer(
             delay_ms=self.settings['delay_ms'],
             min_chars=self.settings['min_chars']
@@ -119,13 +121,14 @@ class SearchManager(QObject):
     def search(self, module_name: str, query: str):
         if module_name in self.debouncers:
             self.debouncers[module_name].debounce(query)
-
+            
     def update_settings(self, settings: dict):
         self.settings.update(settings)
         for debouncer in self.debouncers.values():
             debouncer.delay_ms = settings.get('delay_ms', debouncer.delay_ms)
             debouncer.min_chars = settings.get('min_chars', debouncer.min_chars)
-
+            
     def stop_all(self):
         for debouncer in self.debouncers.values():
             debouncer.stop()
+

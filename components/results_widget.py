@@ -75,6 +75,7 @@ class ResultItemDelegate(QStyledItemDelegate):
 
         painter.restore()
 
+
 class EnhancedResultsWidget(QListWidget):
     item_selected = pyqtSignal(QListWidgetItem)
     
@@ -194,3 +195,25 @@ class EnhancedResultsWidget(QListWidget):
         max_height = min(total_height + padding + scrollbar_height,
                         available_height)
         self.setMaximumHeight(max_height)
+
+    def _update_position(self):
+        """Update widget position relative to parent"""
+        if not self.parent():
+            return
+            
+        parent_pos = self.parent().mapToGlobal(
+            QPoint(0, self.parent().height())
+        )
+        
+        screen = QApplication.screenAt(parent_pos)
+        if not screen:
+            screen = QApplication.primaryScreen()
+        
+        screen_rect = screen.availableGeometry()
+        widget_rect = QRect(parent_pos, self.size())
+        
+        # Ensure widget stays within screen bounds
+        if widget_rect.bottom() > screen_rect.bottom():
+            widget_rect.moveBottom(screen_rect.bottom())
+        
+        self.move(widget_rect.topLeft())

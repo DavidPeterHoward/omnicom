@@ -27,6 +27,8 @@ rapidfuzz
 rdkit
 pubchempy 
 Pillow
+sqlite3
+pyttsx3
 
 black # Code Formatter
 flake8 # Linter for style, logical errors, and more

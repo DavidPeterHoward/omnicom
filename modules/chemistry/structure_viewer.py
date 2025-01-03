@@ -1,8 +1,10 @@
-from typing import Optional
+from typing import Optional, Any, Dict, List
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton, 
-                           QLabel, QSvgWidget)
+                           QLabel)
 from PyQt5.QtCore import Qt
-from PyQt5.QtGui import QKeySequence, QShortcut
+from PyQt5.QtGui import QKeySequence
+from PyQt5.QtWidgets import QShortcut
+from PyQt5.QtSvg import QSvgWidget
 from rdkit.Chem import rdMolDescriptors
 from rdkit.Chem.Draw import rdMolDraw2D
 

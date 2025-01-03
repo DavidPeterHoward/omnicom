@@ -1,13 +1,13 @@
-from typing import Dict
 from modules.base_module import EnhancedBaseModule
+from modules.chemistry import ChemistryModule
+from modules.concept import ConceptModule
 from modules.nearby_words import NearbyWordsModule
 from modules.spelling import SpellingModule
-from modules.concept import ConceptModule
-from modules.chemistry import ChemistryModule
-from modules.domain_search import DomainSearchModule
+from typing import Dict
 
 
 def initialize_modules() -> Dict[str, EnhancedBaseModule]:
+    """Initialize all available modules"""
     modules = {}
     
     try:
@@ -30,12 +30,16 @@ def initialize_modules() -> Dict[str, EnhancedBaseModule]:
     except Exception as e:
         print(f"Error initializing Chemistry module: {e}")
     
-    try:
-        modules["Multi-domain Search"] = DomainSearchModule()
-    except Exception as e:
-        print(f"Error initializing Multi-domain Search module: {e}")
-    
     return modules
 
 
 available_modules = initialize_modules()
+
+__all__ = [
+    'EnhancedBaseModule',
+    'ChemistryModule',
+    'ConceptModule',
+    'NearbyWordsModule',
+    'SpellingModule',
+    'available_modules'
+]

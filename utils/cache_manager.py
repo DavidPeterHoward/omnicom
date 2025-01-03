@@ -7,6 +7,7 @@ from pathlib import Path
 import json
 import weakref
 
+
 class CacheEntry:
     def __init__(self, value: Any, expire_time: float):
         self.value = value
@@ -20,6 +21,7 @@ class CacheEntry:
     def access(self):
         self.access_count += 1
         self.last_access = time.time()
+
 
 class ModuleCache:
     def __init__(self, cache_dir: Path, 

@@ -7,6 +7,7 @@ from modules.base_module import EnhancedBaseModule
 from modules.nearby_words.word_index import WordIndex
 from modules.nearby_words.word_searcher import InitThread, SearchThread
 
+
 class NearbyWordsModule(EnhancedBaseModule):
     def __init__(self):
         super().__init__()

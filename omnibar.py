@@ -2,36 +2,41 @@ from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QH
                            QLineEdit, QListWidget, QListWidgetItem, QLabel,
                            QPushButton, QSystemTrayIcon, QMenu, QStyle, QMessageBox)
 from PyQt5.QtCore import Qt, QPoint, QTimer, QSize
-from PyQt5.QtGui import QFont, QPainter, QColor, QPen, QIcon
+from PyQt5.QtGui import QFont, QPainter, QColor, QPen, QIcon, QCursor
 import keyboard
 import pyautogui
 from pathlib import Path
-from typing import Dict, Any
+from typing import Dict, Any, List, Tuple
 import logging
-
+from utils.icons import ModuleIcon
 from settings import SettingsWindow, load_config, save_config
 from modules import available_modules
-from components import ResultsWidget, SearchDebouncer, HotkeyThread
+from components import ResultsWidget, SearchDebouncer, HotkeyThread, SearchManager, QuickAccessMenu
 
 logger = logging.getLogger(__name__)
+
 
 class OmnibarWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        # Load configuration first
+        self.config = load_config()
+        
         self.dragging = False
         self.offset = None
         self.current_query = None
         self.hotkey_thread = None
         self.settings_window = None
         self.tray_icon = None
+        self.current_module = None
 
         # Initialize components
         self.search_manager = SearchManager()
         self.quick_access = QuickAccessMenu()
         self.quick_access.moduleSelected.connect(self._on_quick_access_selected)
-
-        # Load configuration first
-        self.config = load_config()
+        self.search_debouncer = SearchDebouncer(
+            self.config.get('typing_delay_ms', 200)
+        )
         
         # Initialize UI components
         self._setup_ui()
@@ -95,6 +100,7 @@ class OmnibarWindow(QMainWindow):
                     self.config.get('input_font_size', 11))
         self.search_box.setFont(font)
         self.search_box.setPlaceholderText("Type a command (e.g. :n happy, :s word)")
+        self.search_box.textChanged.connect(self._on_text_changed)
         self.search_box.setStyleSheet("""
             QLineEdit {
                 border: none;
@@ -128,7 +134,7 @@ class OmnibarWindow(QMainWindow):
         main_layout.addWidget(search_container)
         
         # Results widget
-        self.results = EnhancedResultsWidget(self)
+        self.results = ResultsWidget(self)
         self.results.setFont(QFont(self.config.get('font_family', 'Segoe UI'),
                                  self.config.get('results_font_size', 10)))
         self.results.item_selected.connect(self._on_result_selected)
@@ -159,11 +165,20 @@ class OmnibarWindow(QMainWindow):
                 if module_settings.get(name, {}).get('enabled', True):
                     logger.info(f"Initializing module: {name}")
                     enabled_modules[name] = module
+                    
+                    # Register module with search manager
+                    self.search_manager.register_module(
+                        name,
+                        module.get_results
+                    )
+                    
+                    # Apply module settings
                     if hasattr(module, 'apply_settings'):
                         module.apply_settings(module_settings.get(name, {}))
+                        
             except Exception as e:
                 logger.error(f"Error initializing module {name}: {e}")
-
+                
         return enabled_modules
 
     def _apply_window_style(self):
@@ -249,7 +264,7 @@ class OmnibarWindow(QMainWindow):
             return
         
         self.current_query = text
-        self.search_debouncer.debounce(self._process_search)
+        self.search_debouncer.debounce(text)
 
     def _process_search(self):
         if not self.current_query:
@@ -316,27 +331,31 @@ class OmnibarWindow(QMainWindow):
             self.results.addItem(error_item)
 
     def _show_settings(self):
-        try:
-            # Initialize settings window if needed
-            if not self.settings_window:
+        if not hasattr(self, 'settings_window') or self.settings_window is None:
+            try:
                 from settings.pages.main_window import SettingsWindow
                 self.settings_window = SettingsWindow(self)
                 self.settings_window.settingsChanged.connect(self.apply_settings)
-            
-            # Load current settings
+            except Exception as e:
+                logger.error(f"Error creating settings window: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Could not create settings window: {str(e)}"
+                )
+                return
+
+        try:
             self.settings_window.load_settings()
-            
-            # Show and raise window
             self.settings_window.show()
             self.settings_window.raise_()
             self.settings_window.activateWindow()
-            
         except Exception as e:
-            self.logger.error(f"Error showing settings: {e}")
+            logger.error(f"Error showing settings window: {e}")
             QMessageBox.critical(
                 self,
                 "Error",
-                f"Could not open settings window: {str(e)}"
+                f"Could not show settings window: {str(e)}"
             )
 
     def _show_quick_access(self):

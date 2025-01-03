@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                            QLabel, QScrollArea, QFrame)
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from PyQt5.QtGui import QIcon, QPainter, QPainterPath, QColor
 from utils.icons import IconRegistry, ModuleIcon
 from typing import Dict, List, Any
@@ -11,7 +11,7 @@ class ModuleButton(QPushButton):
         self.name = name
         self.description = description
         self.setIcon(ModuleIcon(icon_name))
-        self.setIconSize(Qt.QSize(24, 24))
+        self.setIconSize(QSize(24, 24))
         self.setFixedSize(40, 40)
         self.setToolTip(f"{name}\n{description}")
         self._apply_styles()
@@ -82,6 +82,7 @@ class ModuleGroupWidget(QFrame):
                 border-radius: 8px;
             }
         """)
+
 
 class QuickAccessMenu(QWidget):
     moduleSelected = pyqtSignal(str)  # Emits module name

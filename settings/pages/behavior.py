@@ -5,6 +5,8 @@ from PyQt5.QtCore import Qt, pyqtSignal
 from PyQt5.QtGui import QKeySequence
 import json
 from pathlib import Path
+from typing import Dict, Any, List, Tuple, Optional
+
 
 class KeyboardShortcutWidget(QWidget):
     shortcutChanged = pyqtSignal(str, str)  # action, shortcut
@@ -44,6 +46,7 @@ class KeyboardShortcutWidget(QWidget):
 
     def get_shortcut(self) -> str:
         return self.shortcut_edit.keySequence().toString()
+
 
 class BehaviorPage(QWidget):
     def __init__(self):
@@ -270,7 +273,7 @@ class BehaviorPage(QWidget):
 
     def _backup_settings(self):
         try:
-            from settings.utils import save_config
+            from settings.pages.utils import save_config
             backup_path = Path.home() / '.omnibar' / 'backup'
             backup_path.mkdir(parents=True, exist_ok=True)
             
@@ -402,7 +405,7 @@ class BehaviorPage(QWidget):
         """Get all current keyboard shortcuts"""
         return self.shortcuts.copy()
 
-    def validate_settings(self) -> tuple[bool, str]:
+    def validate_settings(self):
         """Validate current settings configuration"""
         # Check for shortcut conflicts
         used_shortcuts = set()

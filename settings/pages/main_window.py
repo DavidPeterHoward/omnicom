@@ -1,10 +1,11 @@
 from PyQt5.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QTreeWidget, QTreeWidgetItem, QStackedWidget,
                            QPushButton, QMessageBox)
-from PyQt5.QtCore import Qt, pyqtSignal
+from PyQt5.QtCore import Qt, pyqtSignal, QSize
 from settings.pages import AppearancePage, BehaviorPage, ModulesPage
-from settings.utils import load_config, save_config
+from settings.pages.utils import load_config, save_config
 from modules import available_modules
+from typing import Dict, Any, List, Tuple
 
 class SettingsWindow(QMainWindow):
     settingsChanged = pyqtSignal()

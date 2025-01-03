@@ -9,6 +9,7 @@ import logging
 
 T = TypeVar('T')
 
+
 class AsyncResult(Generic[T]):
     def __init__(self):
         self.value: Optional[T] = None
@@ -31,6 +32,7 @@ class AsyncResult(Generic[T]):
         if self.error:
             raise self.error
         return self.value
+
 
 class AsyncWorker(QThread):
     resultReady = pyqtSignal(object)

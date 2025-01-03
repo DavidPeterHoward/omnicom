@@ -2,6 +2,8 @@ from PyQt5.QtWidgets import (QScrollBar, QStyleOptionSlider, QStyle,
                            QWidget, QApplication)
 from PyQt5.QtCore import Qt, QRect, QPoint, pyqtSignal, QSize
 from PyQt5.QtGui import QPainter, QColor, QPainterPath
+from typing import Dict, Any, List, Tuple
+
 
 class ModernScrollBar(QScrollBar):
     """Modern-looking scrollbar with smooth animations and hover effects"""
@@ -134,6 +136,7 @@ class ModernScrollBar(QScrollBar):
     def sizeHint(self):
         return QSize(8, super().sizeHint().height())
 
+
 class ModernScrollArea(QWidget):
     """Custom scroll area with modern scrollbars"""
     
@@ -196,7 +199,7 @@ class ModernScrollArea(QWidget):
         self.horizontal_scroll.setPageStep(h_step)
         self.vertical_scroll.setPageStep(v_step)
         
-    def get_scroll_positions(self) -> tuple[int, int]:
+    def get_scroll_positions(self):
         """Get current scroll positions"""
         return (self.horizontal_scroll.value(),
                 self.vertical_scroll.value())

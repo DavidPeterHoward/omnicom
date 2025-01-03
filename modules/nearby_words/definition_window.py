@@ -1,11 +1,14 @@
 from PyQt5.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
                            QLabel, QScrollArea, QFrame, QTabWidget)
 from PyQt5.QtCore import Qt, pyqtSignal
-from PyQt5.QtGui import QFont, QKeySequence, QShortcut
+from PyQt5.QtGui import QFont, QKeySequence
+from PyQt5.QtWidgets import QShortcut
 import nltk
 from nltk.corpus import wordnet as wn
 from typing import List, Dict, Any
+
 from utils.tts_manager import TTSManager
+
 
 class WordMeaningWidget(QFrame):
     def __init__(self, meaning_data: Dict[str, Any], parent=None):
@@ -75,6 +78,7 @@ class WordMeaningWidget(QFrame):
                 margin: 4px;
             }
         """)
+
 
 class DefinitionWindow(QWidget):
     closed = pyqtSignal()

@@ -1,5 +1,5 @@
 from typing import Dict, Optional
-from PyQt5.QtGui import QIcon, QPainter, QColor, QPainterPath
+from PyQt5.QtGui import QIcon, QPainter, QColor, QPainterPath, QPixmap
 from PyQt5.QtCore import Qt, QSize, QRect, QPoint
 from PyQt5.QtSvg import QSvgRenderer
 from dataclasses import dataclass
@@ -67,7 +67,11 @@ class IconRegistry:
         # Create icon
         icon = QIcon()
         for s in [16, 24, 32, 48]:  # Common icon sizes
-            pixmap = renderer.createPixmap(QSize(s, s))
+            pixmap = QPixmap(QSize(s, s))
+            pixmap.fill(Qt.transparent)
+            painter = QPainter(pixmap)
+            renderer.render(painter)
+            painter.end()
             icon.addPixmap(pixmap)
 
         return icon
