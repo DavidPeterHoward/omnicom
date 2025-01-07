@@ -9,4 +9,5 @@
 ---
 
 
+![Ominbar Chemistry](ominbar_chemistry.png)
 ![Omnibar Interface](omnibar_interface.png)
