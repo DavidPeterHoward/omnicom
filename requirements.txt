@@ -12,16 +12,12 @@ requests
 pyautogui
 pydantic
 qtawesome
-asyncio
-numpy
 gensim
 networkx
 aiohttp
 asyncio
 metaphone
 beautifulsoup4 
-pickle5
-rapidfuzz
 wikipedia-api
 rapidfuzz
 rdkit

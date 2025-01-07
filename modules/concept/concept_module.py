@@ -29,11 +29,11 @@ class ConceptModule(EnhancedBaseModule):
 
     @property
     def name(self) -> str:
-        return "Concepts"
+        return "Research Concepts"
 
     @property
     def commands(self) -> List[str]:
-        return [":c", ":concept", "@"]
+        return [":r", ":research", "@"]
 
     @property
     def example(self) -> str:

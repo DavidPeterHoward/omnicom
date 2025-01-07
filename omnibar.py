@@ -1,6 +1,6 @@
 from PyQt5.QtWidgets import (QApplication, QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                            QLineEdit, QListWidget, QListWidgetItem, QLabel,
-                           QPushButton, QSystemTrayIcon, QMenu, QStyle)
+                           QPushButton, QSystemTrayIcon, QMenu, QStyle, QMessageBox)
 from PyQt5.QtCore import Qt, QPoint, QTimer, QSize
 from PyQt5.QtGui import QFont, QPainter, QColor, QPen, QIcon
 import keyboard
@@ -304,12 +304,31 @@ class OmnibarWindow(QMainWindow):
             self.results.addItem(error_item)
 
     def _show_settings(self):
-        if not hasattr(self, 'settings_window'):
-            self.settings_window = SettingsWindow(self)
-            self.settings_window.settingsChanged.connect(self.apply_settings)
-        self.settings_window.show()
-        self.settings_window.raise_()
-        self.settings_window.activateWindow()
+        if not hasattr(self, 'settings_window') or self.settings_window is None:
+            try:
+                self.settings_window = SettingsWindow(self)
+                self.settings_window.settingsChanged.connect(self.apply_settings)
+            except Exception as e:
+                logger.error(f"Error creating settings window: {e}")
+                QMessageBox.critical(
+                    self,
+                    "Error",
+                    f"Could not create settings window: {str(e)}"
+                )
+                return
+
+        try:
+            self.settings_window.load_settings()
+            self.settings_window.show()
+            self.settings_window.raise_()
+            self.settings_window.activateWindow()
+        except Exception as e:
+            logger.error(f"Error showing settings window: {e}")
+            QMessageBox.critical(
+                self,
+                "Error",
+                f"Could not show settings window: {str(e)}"
+            )
 
     def apply_settings(self):
         self.config = load_config()
